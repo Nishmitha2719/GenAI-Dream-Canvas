@@ -196,12 +196,3 @@ Only `prompt` is required. The response looks like this:
 - **Hosting:** Google Colab + Cloudflare quick tunnel
 
 ---
-
-## Licenses
-
-The model weights carry their own licenses. Stable Diffusion 1.5 uses the CreativeML OpenRAIL-M license. SD-Turbo uses the Stability AI non-commercial research license. Check both before using DreamCanvas for anything beyond learning and demos.
-
----
-
-*DreamCanvas is a Generative AI course project at NMAM Institute of Technology.*
-"# GenAI-Dream-Canvas" 
