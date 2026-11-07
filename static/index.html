@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DreamCanvas — text to image</title>
+<meta name="description" content="Describe a picture and DreamCanvas paints it with Stable Diffusion, then scores how well it matches your words.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%233346d3%22/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#studio">DreamCanvas</a>
+  <nav>
+    <a href="#studio">Studio</a>
+    <a href="#gallery">Your images</a>
+    <a href="#team">How it was built</a>
+  </nav>
+  <span class="status" id="status" role="status"><span class="dot"></span><span id="statusText">Connecting…</span></span>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Words in.<br>Pictures out of the noise.</h1>
+    <p>Describe what you want to see. DreamCanvas starts from pure static and removes it step by step with Stable Diffusion, then uses CLIP to check how closely the picture matches what you wrote.</p>
+  </section>
+
+  <section class="studio" id="studio" aria-label="Image studio">
+    <form class="controls" id="form" novalidate>
+      <label class="field">
+        <span class="lbl">Describe your image</span>
+        <textarea id="prompt" rows="4" maxlength="400" placeholder="A lighthouse on a rocky cliff during a thunderstorm, waves crashing" required></textarea>
+        <span class="hint"><span id="count">0</span>/400 · Press Ctrl + Enter to paint</span>
+        <span class="hint warn" id="longHint" hidden>Long description: the model reads only about the first 50–60 words, so put the most important details first.</span>
+      </label>
+
+      <div class="ideas" aria-label="Prompt ideas">
+        <button type="button" class="idea">A tea stall on a rainy Mangalore street at dusk</button>
+        <button type="button" class="idea">An astronaut tending a rooftop garden on Mars</button>
+        <button type="button" class="idea">A red fox reading a book in a snowy forest</button>
+      </div>
+
+      <fieldset class="field">
+        <legend class="lbl">Style</legend>
+        <div class="styles" id="styles"></div>
+      </fieldset>
+
+      <div class="field">
+        <span class="lbl" id="candLbl">Pick the best of</span>
+        <div class="seg" role="radiogroup" aria-labelledby="candLbl" id="cand">
+          <button type="button" role="radio" aria-checked="true" data-v="1">1</button>
+          <button type="button" role="radio" aria-checked="false" data-v="2">2</button>
+          <button type="button" role="radio" aria-checked="false" data-v="3">3</button>
+          <button type="button" role="radio" aria-checked="false" data-v="4">4</button>
+        </div>
+        <span class="hint">More candidates take longer, but CLIP keeps the one that matches your words best.</span>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced settings</summary>
+        <label class="field" id="negWrap">
+          <span class="lbl">Leave out</span>
+          <input id="negative" type="text" maxlength="400" placeholder="people, text, blur">
+        </label>
+        <div class="row">
+          <label class="field">
+            <span class="lbl">Width</span>
+            <select id="width"><option>384</option><option selected>512</option><option>640</option><option>768</option></select>
+          </label>
+          <label class="field">
+            <span class="lbl">Height</span>
+            <select id="height"><option>384</option><option selected>512</option><option>640</option><option>768</option></select>
+          </label>
+        </div>
+        <label class="field">
+          <span class="lbl">Steps <output id="stepsOut">25</output></span>
+          <input id="steps" type="range" min="1" max="50" value="25">
+          <span class="hint">More steps remove more noise. Past ~30 the gain is small.</span>
+        </label>
+        <label class="field" id="guideWrap">
+          <span class="lbl">Prompt strength <output id="guideOut">7.5</output></span>
+          <input id="guidance" type="range" min="1" max="15" step="0.5" value="7.5">
+          <span class="hint">Higher follows your words more literally; too high looks harsh.</span>
+        </label>
+        <label class="field">
+          <span class="lbl">Seed</span>
+          <input id="seed" type="number" min="0" placeholder="Random">
+          <span class="hint">Same prompt + same seed = same picture.</span>
+        </label>
+      </details>
+
+      <button class="paint" id="paint" type="submit">Paint it</button>
+      <p class="error" id="error" role="alert" hidden></p>
+    </form>
+
+    <div class="stage">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="noise" width="512" height="512" aria-hidden="true"></canvas>
+        <img id="result" alt="" hidden>
+        <p class="empty" id="empty">Your picture will develop here.</p>
+        <p class="progress" id="progress" hidden>Removing noise… <span id="timer">0.0</span>s</p>
+      </div>
+      <div class="meta" id="meta" hidden>
+        <div class="score">
+          <span class="score-num" id="scoreNum">—</span>
+          <span class="score-txt"><b>Match score</b><span id="scoreTxt"></span></span>
+        </div>
+        <div class="actions">
+          <a class="btn" id="download" download="dreamcanvas.png">Download</a>
+          <button class="btn" id="reuse" type="button">Reuse seed</button>
+        </div>
+      </div>
+      <div class="cands" id="cands" hidden></div>
+      <p class="cutoff" id="cutoff" hidden></p>
+      <p class="fine" id="fine"></p>
+    </div>
+  </section>
+
+  <section class="gallery" id="gallery">
+    <div class="sec-head">
+      <h2>Your images</h2>
+      <button class="link" id="clear" type="button" hidden>Clear</button>
+    </div>
+    <p class="sub" id="galEmpty">Pictures you paint are kept here in this browser.</p>
+    <div class="grid" id="galGrid"></div>
+  </section>
+
+  <section class="team" id="team">
+    <h2>How it was built</h2>
+    <p class="lead">Ten classmates and faculty each built a generative AI project. Five of them did text-to-image with Stable Diffusion, and those gave the best results, so we merged their best ideas into one model and fixed what was missing.</p>
+
+    <ol class="pipeline">
+      <li><b>Your prompt + a style</b><span>Style presets add tested wording and a list of things to avoid.</span></li>
+      <li><b>Stable Diffusion 1.5</b><span>Half-precision weights, attention slicing and VAE tiling, so it fits on a free Colab GPU. Falls back to CPU.</span></li>
+      <li><b>CLIP scoring</b><span>Every candidate is compared with your words. The best match is shown first.</span></li>
+      <li><b>Safety check</b><span>The built-in safety checker stays on. Flagged images are blacked out.</span></li>
+    </ol>
+
+    <div class="credits">
+      <article>
+        <h3>Memory-efficient engine</h3>
+        <p>A half-precision pipeline with attention slicing and VAE tiling. It became the core of the engine.</p>
+      </article>
+      <article>
+        <h3>Measuring accuracy</h3>
+        <p>The original version compared two sentences. Now the prompt is compared with the actual image using CLIP.</p>
+      </article>
+      <article>
+        <h3>CPU fallback</h3>
+        <p>A simple prompt-to-file generator that also runs without a GPU, kept as the fallback.</p>
+      </article>
+      <article>
+        <h3>Interactive controls</h3>
+        <p>An interface with tunable sliders from a text-generation project shaped these controls.</p>
+      </article>
+      <article>
+        <h3>Use cases</h3>
+        <p>Pipeline design and applications in education and design.</p>
+      </article>
+      <article class="muted">
+        <h3>Also explored</h3>
+        <p>VAE image generators, LSTM text generation and code generation with CodeGen.</p>
+      </article>
+    </div>
+
+    <h3 class="samples-title">Early results from the original projects</h3>
+    <div class="samples">
+      <figure><img src="/static/samples/underwater-city.jpg" alt="Coral reef with ruined buildings underwater" loading="lazy"><figcaption>"Underwater city"</figcaption></figure>
+      <figure><img src="/static/samples/future-city.jpg" alt="Aerial view of a glowing futuristic city" loading="lazy"><figcaption>"City ahead in time"</figcaption></figure>
+      <figure><img src="/static/samples/mountain-lake.jpg" alt="Mountain lake landscape" loading="lazy"><figcaption>"Mountain lake"</figcaption></figure>
+      <figure><img src="/static/samples/river-house.jpg" alt="Small house under a starry night sky by a river" loading="lazy"><figcaption>"A house by a river under the stars"</figcaption></figure>
+      <figure><img src="/static/samples/cat.jpg" alt="A cat" loading="lazy"><figcaption>"Cat"</figcaption></figure>
+      <figure><img src="/static/samples/sunset-car.jpg" alt="A car on a highway at sunset" loading="lazy"><figcaption>"Futuristic car at sunset"</figcaption></figure>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>DreamCanvas · Generative AI course project, NMAM Institute of Technology.</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
